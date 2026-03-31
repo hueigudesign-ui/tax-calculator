@@ -34,9 +34,9 @@
 
     <div class="mb-10 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
-            <label class="block text-sm font-medium text-gray-500 mb-2">免稅額與扣除額總計 (萬元)</label>
+            <label class="block text-sm font-medium text-gray-500 mb-2">免稅額與喪葬費總計 (萬元)</label>
             <input type="number" v-model="deductionsWan" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-gray-300 transition" />
-            <p class="text-xs text-gray-400 mt-1">預設：一般免稅額 1333 萬</p>
+            <p class="text-xs text-gray-400 mt-1">預設：免稅額 1333 萬 + 喪葬費 138 萬</p>
         </div>
         <div>
             <label class="block text-sm font-medium text-blue-600 mb-2">預期/現有遺產稅額 (萬元)</label>
@@ -84,9 +84,9 @@
 
     createApp({
         setup() {
-            // UI 單位皆為「萬元」
-            const deductionsWan = ref(1333); 
-            const targetTaxWan = ref(50);   
+            // 修正：預設單位皆為「萬元」，改為 1333 + 138 = 1471
+            const deductionsWan = ref(1471); 
+            const targetTaxWan = ref(5);   
             const insuranceBenefitWan = ref(0);  
 
             // 2026 級距參數 (單位：元)
