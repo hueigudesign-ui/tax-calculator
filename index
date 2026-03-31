@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資產反推與節稅評估報告</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f5f5f7; }
+        .apple-card { background: #ffffff; border-radius: 18px; box-shadow: 0 4px 24px rgba(0,0,0,0.04); }
+        
+        /* 列印與 PDF 匯出專用樣式 */
+        @media print {
+            body { background-color: #ffffff; }
+            .no-print { display: none !important; }
+            .print-clean { border: none !important; box-shadow: none !important; background: transparent !important; padding: 0 !important; }
+            input { border: none !important; background: transparent !important; border-bottom: 1px solid #e5e7eb !important; border-radius: 0 !important; outline: none !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 p-4 md:p-8 antialiased">
+
+<div id="app" class="max-w-3xl mx-auto apple-card p-8 md:p-12 print-clean">
+    
+    <div class="flex justify-between items-end mb-10 border-b pb-6">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight text-gray-900">資產傳承與稅務評估</h1>
+            <p class="text-sm text-gray-500 mt-2">專屬規劃顧問：硬了再上</p>
+        </div>
+        <button @click="exportPDF" class="no-print bg-gray-900 text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition">
+            匯出 PDF / 列印
+        </button>
+    </div>
+
+    <div class="mb-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+            <label class="block text-sm font-medium text-gray-500 mb-2">免稅額與扣除額總計 (元)</label>
+            <input type="number" v-model="deductions" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-gray-300 transition" />
+            <p class="text-xs text-gray-400 mt-1">預設為一般免稅額 1333 萬</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-blue-600 mb-2">預期/現有遺產稅額 (元)</label>
+            <input type="number" v-model="targetTax" class="w-full bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-lg font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-300 transition" />
+        </div>
+    </div>
+
+    <div class="bg-gray-900 text-white rounded-2xl p-8 mb-10 print-clean" style="print-color-adjust: exact;">
+        <p class="text-sm text-gray-400 mb-1">依據現行稅率反推之</p>
+        <h2 class="text-4xl font-bold tracking-tight mb-2">估算資產總額</h2>
+        <p class="text-5xl font-light tracking-wider mt-4">NT$ {{ formatCurrency(calculatedTotalEstate) }}</p>
+    </div>
+
+    <div class="border-t pt-10">
+        <h3 class="text-xl font-bold mb-6 flex items-center">
+            <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg text-sm mr-3">戰略對比</span>
+            保險槓桿與稅務優化
+        </h3>
+        
+        <div class="mb-8">
+            <label class="block text-sm font-medium text-gray-500 mb-2">規劃指定受益人壽險保額 (元)</label>
+            <input type="number" v-model="insuranceBenefit" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-gray-300 transition" placeholder="輸入保險給付金額..." />
+            <p class="text-xs text-gray-400 mt-2">依保險法第112條，指定受益人之人壽保險給付不計入遺產總額。</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="border border-gray-200 rounded-2xl p-6 bg-white">
+                <p class="text-sm text-gray-500 mb-1">投保前應納稅額</p>
+                <p class="text-2xl font-bold text-gray-900 mb-2">NT$ {{ formatCurrency(targetTax) }}</p>
+            </div>
+            <div class="border border-green-200 rounded-2xl p-6 bg-green-50">
+                <p class="text-sm text-green-700 mb-1">投保後應納稅額</p>
+                <p class="text-2xl font-bold text-green-700 mb-2">NT$ {{ formatCurrency(taxAfterInsurance) }}</p>
+                <div class="mt-4 pt-4 border-t border-green-200">
+                    <p class="text-sm text-green-800">創造節稅空間</p>
+                    <p class="text-xl font-bold text-green-600">NT$ {{ formatCurrency(taxSaved) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed } = Vue
+
+    createApp({
+        setup() {
+            // 預設參數
+            const deductions = ref(13330000); // 預設免稅額
+            const targetTax = ref(5000000);   // 預設稅額
+            const insuranceBenefit = ref(0);  // 預設保額
+
+            // 反推資產總額邏輯
+            const calculatedTotalEstate = computed(() => {
+                let tax = Number(targetTax.value);
+                let ded = Number(deductions.value);
+                let netEstate = 0;
+
+                if (tax === 0) return ded;
+
+                // 台灣遺產稅率逆向推算 (10%, 15%, 20%)
+                if (tax <= 5000000) {
+                    // 淨額 5000萬以下: 10%
+                    netEstate = tax / 0.10;
+                } else if (tax <= 12500000) {
+                    // 淨額 5000萬~1億: 15% - 累進差額 250萬
+                    netEstate = (tax + 2500000) / 0.15;
+                } else {
+                    // 淨額 1億以上: 20% - 累進差額 750萬
+                    netEstate = (tax + 7500000) / 0.20;
+                }
+
+                return Math.round(netEstate + ded);
+            });
+
+            // 計算投保後的遺產稅 (正向計算)
+            const taxAfterInsurance = computed(() => {
+                let estateAfterInsurance = calculatedTotalEstate.value - Number(insuranceBenefit.value);
+                let netEstate = estateAfterInsurance - Number(deductions.value);
+                
+                if (netEstate <= 0) return 0;
+
+                let calculatedTax = 0;
+                if (netEstate <= 50000000) {
+                    calculatedTax = netEstate * 0.10;
+                } else if (netEstate <= 100000000) {
+                    calculatedTax = netEstate * 0.15 - 2500000;
+                } else {
+                    calculatedTax = netEstate * 0.20 - 7500000;
+                }
+                
+                return Math.max(0, Math.round(calculatedTax));
+            });
+
+            // 計算節省的稅額
+            const taxSaved = computed(() => {
+                return Math.max(0, Number(targetTax.value) - taxAfterInsurance.value);
+            });
+
+            // 格式化金錢
+            const formatCurrency = (value) => {
+                return new Intl.NumberFormat('zh-TW').format(value);
+            }
+
+            // 呼叫列印/匯出 PDF
+            const exportPDF = () => {
+                window.print();
+            }
+
+            return {
+                deductions,
+                targetTax,
+                insuranceBenefit,
+                calculatedTotalEstate,
+                taxAfterInsurance,
+                taxSaved,
+                formatCurrency,
+                exportPDF
+            }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
